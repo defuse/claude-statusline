@@ -10,7 +10,7 @@ IFS=$'\t' read -r MODEL MODEL_ID VERSION CTX_SIZE USED_PCT COST VIM_MODE DIR < <
         ((.context_window.used_percentage // 0) | floor),
         (.cost.total_cost_usd // 0),
         (.vim.mode // ""),
-        (.workspace.current_dir)
+        (.workspace.current_dir // "")
     ] | @tsv'
 )
 
@@ -88,15 +88,15 @@ LINE2="${CTX_BAR} ${REM_FMT}% of ${CTX_LABEL}"
 
 # Line 3: Max plan usage + cost
 USAGE=$("$HOME/.claude/usage.sh" 2>/dev/null)
-if [ -n "$USAGE" ] && ! echo "$USAGE" | jq -e '.error' > /dev/null 2>&1; then
+if [ -n "$USAGE" ]; then
     IFS=$'\t' read -r H5 D7 H5_RESET D7_RESET EXTRA_USED < <(
         echo "$USAGE" | jq -r '[
-            ((.five_hour.utilization // 0) | round),
-            ((.seven_day.utilization // 0) | round),
-            (.five_hour.resets_at // ""),
-            (.seven_day.resets_at // ""),
-            (.extra_usage.used_credits // 0)
-        ] | @tsv' 2>/dev/null
+                ((.five_hour.utilization // 0) | round),
+                ((.seven_day.utilization // 0) | round),
+                (.five_hour.resets_at // ""),
+                (.seven_day.resets_at // ""),
+                (.extra_usage.used_credits // 0)
+            ] | @tsv' 2>/dev/null
     )
 fi
 if [ -n "$H5" ] && [ "$H5" != "null" ]; then

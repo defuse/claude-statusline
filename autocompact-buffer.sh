@@ -6,17 +6,13 @@
 
 CLAUDE_VER="${1:-unknown}"
 MODEL_ID="${2:-unknown}"
-CACHE_KEY="${CLAUDE_VER}_${MODEL_ID}"
 CACHE_DIR="$HOME/.claude/cache"
-CACHE_KEY_FILE="$CACHE_DIR/autocompact_buffer.key"
-CACHE_VAL_FILE="$CACHE_DIR/autocompact_buffer.val"
+CACHE_FILE="$CACHE_DIR/autocompact_buffer_${CLAUDE_VER}_${MODEL_ID}.val"
 
-# Check cache (plain text, no jq on hot path)
-if [ -f "$CACHE_KEY_FILE" ] && [ -f "$CACHE_VAL_FILE" ]; then
-    if [ "$(<"$CACHE_KEY_FILE")" = "$CACHE_KEY" ]; then
-        cat "$CACHE_VAL_FILE"
-        exit 0
-    fi
+# Check cache
+if [ -f "$CACHE_FILE" ]; then
+    cat "$CACHE_FILE"
+    exit 0
 fi
 
 # Cache miss: print nothing and probe in the background.
@@ -70,8 +66,17 @@ else:
     read_all()
     try: os.kill(pid, 15)
     except: pass
-    try: os.waitpid(pid, 0)
-    except: pass
+    for _ in range(10):
+        try:
+            p, _ = os.waitpid(pid, os.WNOHANG)
+            if p: break
+        except: break
+        time.sleep(0.5)
+    else:
+        try: os.kill(pid, 9)
+        except: pass
+        try: os.waitpid(pid, 0)
+        except: pass
     output = b''.join(buf)
     clean = re.sub(rb'\x1b\[[0-9;]*[a-zA-Z]|\x1b\]\d*;?[^\x07]*\x07?', b'', output)
     sys.stdout.buffer.write(clean)
@@ -81,8 +86,7 @@ else:
         if [ -n "$BUFFER_K" ]; then
             BUFFER_TOKENS=$(awk "BEGIN {printf \"%.0f\", $BUFFER_K * 1000}")
             mkdir -p "$CACHE_DIR"
-            printf '%s' "$BUFFER_TOKENS" > "$CACHE_VAL_FILE"
-            printf '%s' "$CACHE_KEY" > "$CACHE_KEY_FILE"
+            printf '%s' "$BUFFER_TOKENS" > "$CACHE_FILE"
         fi
     ) &>/dev/null &
     disown
