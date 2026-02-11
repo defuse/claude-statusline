@@ -1,4 +1,4 @@
-![my statusline](https://raw.githubusercontent.com/defuse/claude-statusline/refs/heads/main/statusline.png)
+![my statusline](https://raw.githubusercontent.com/defuse/claude-statusline/refs/heads/main/example.png)
 
 ### Installation
 
