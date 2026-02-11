@@ -22,7 +22,6 @@ cd ~/.claude
 git init
 git remote add origin git@github.com:defuse/claude-statusline.git
 git fetch
-git reset origin/main
 git checkout -t origin/main
 ```
 
