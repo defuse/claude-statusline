@@ -2,15 +2,19 @@
 input=$(cat)
 
 MODEL=$(echo "$input" | jq -r '.model.display_name')
-PCT=$(echo "$input" | jq -r '.context_window.used_percentage // 0' | cut -d. -f1)
-REMAINING=$(echo "$input" | jq -r '.context_window.remaining_percentage // 100' | cut -d. -f1)
+MODEL_ID=$(echo "$input" | jq -r '.model.id')
+VERSION=$(echo "$input" | jq -r '.version // empty')
 CTX_SIZE=$(echo "$input" | jq -r '.context_window.context_window_size // 200000')
+USED_PCT=$(echo "$input" | jq -r '.context_window.used_percentage // 0' | cut -d. -f1)
 COST=$(echo "$input" | jq -r '.cost.total_cost_usd // 0')
 VIM_MODE=$(echo "$input" | jq -r '.vim.mode // empty')
 DIR=$(echo "$input" | jq -r '.workspace.current_dir')
 
+# Autocompact buffer (cached, non-blocking background probe on miss)
+BUFFER_TOKENS=$("$HOME/.claude/autocompact-buffer.sh" "$VERSION" "$MODEL_ID" 2>/dev/null)
+
 GREEN='\033[32m'; YELLOW='\033[33m'; RED='\033[31m'
-CYAN='\033[36m'; MAGENTA='\033[35m'; BRIGHT_GREEN='\033[92m'; DIM='\033[2m'; RESET='\033[0m'
+CYAN='\033[36m'; MAGENTA='\033[35m'; BRIGHT_GREEN='\033[92m'; DIM='\033[2m'; GRAY='\033[90m'; RESET='\033[0m'
 
 # Build a progress bar: usage $1=pct $2=width
 make_bar() {
@@ -32,10 +36,30 @@ pct_color() {
     else echo "$default"; fi
 }
 
-DARK_GREEN='\033[2;32m'
-CTX_COLOR=$(pct_color "$DARK_GREEN" "$PCT")
-CTX_BAR_RAW=$(make_bar "$PCT" 52)
-CTX_BAR=$(echo "$CTX_BAR_RAW" | tr '█░' '░█')
+# Context bar: 3-section [used ░░░][free ███][buffer ░░░]
+BAR_W=52
+if [ -n "$BUFFER_TOKENS" ] && [ "$BUFFER_TOKENS" -gt 0 ] 2>/dev/null; then
+    BUF_PCT=$((BUFFER_TOKENS * 100 / CTX_SIZE))
+    REMAINING=$((100 - USED_PCT - BUF_PCT))
+    [ "$REMAINING" -lt 0 ] && REMAINING=0
+    PCT=$((100 - REMAINING))
+    USED_W=$((USED_PCT * BAR_W / 100))
+    BUF_W=$((BUFFER_TOKENS * BAR_W / CTX_SIZE))
+    FREE_W=$((BAR_W - USED_W - BUF_W))
+    [ "$FREE_W" -lt 0 ] && FREE_W=0
+else
+    PCT=$USED_PCT
+    REMAINING=$((100 - PCT))
+    USED_W=$((PCT * BAR_W / 100))
+    FREE_W=$((BAR_W - USED_W))
+    BUF_W=0
+fi
+if [ "$PCT" -ge 80 ]; then     USED_CLR='\033[2;31m'; FREE_CLR="$RED"
+elif [ "$PCT" -ge 60 ]; then   USED_CLR='\033[2;33m'; FREE_CLR="$YELLOW"
+else                            USED_CLR='\033[2;32m'; FREE_CLR="$GREEN"
+fi
+printf -v _U '%*s' "$USED_W" ''; printf -v _F '%*s' "$FREE_W" ''; printf -v _B '%*s' "$BUF_W" ''
+CTX_BAR="${USED_CLR}${_U// /░}${FREE_CLR}${_F// /█}${RESET}${GRAY}${_B// /░}${RESET}"
 CTX_LABEL=$((CTX_SIZE / 1000))k
 COST_FMT=$(printf '$%.2f' "$COST")
 
@@ -56,7 +80,7 @@ LINE1="$LINE1 ${DIR}"
 
 # Line 2: context window bar
 REM_FMT=$(printf '%2s' "$REMAINING")
-LINE2="${CTX_COLOR}${CTX_BAR}${RESET} ${REM_FMT}% of ${CTX_LABEL}"
+LINE2="${CTX_BAR} ${REM_FMT}% of ${CTX_LABEL}"
 
 # Line 3: Max plan usage + cost
 USAGE=$("$HOME/.claude/usage.sh" 2>/dev/null)
