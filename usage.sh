@@ -1,9 +1,9 @@
 #!/bin/bash
-# Fetches Claude Max usage data with 60-second caching.
+# Fetches Claude Max usage data with caching.
 # Outputs JSON with utilization percentages.
 
 CACHE_FILE="/tmp/claude-usage-cache.json"
-CACHE_MAX_AGE=60
+CACHE_MAX_AGE=120
 CREDENTIALS_FILE="$HOME/.claude/.credentials.json"
 
 # Check if cache is fresh

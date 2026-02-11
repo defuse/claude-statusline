@@ -1,14 +1,18 @@
 #!/bin/bash
 input=$(cat)
 
-MODEL=$(echo "$input" | jq -r '.model.display_name')
-MODEL_ID=$(echo "$input" | jq -r '.model.id')
-VERSION=$(echo "$input" | jq -r '.version // empty')
-CTX_SIZE=$(echo "$input" | jq -r '.context_window.context_window_size // 200000')
-USED_PCT=$(echo "$input" | jq -r '.context_window.used_percentage // 0' | cut -d. -f1)
-COST=$(echo "$input" | jq -r '.cost.total_cost_usd // 0')
-VIM_MODE=$(echo "$input" | jq -r '.vim.mode // empty')
-DIR=$(echo "$input" | jq -r '.workspace.current_dir')
+IFS=$'\t' read -r MODEL MODEL_ID VERSION CTX_SIZE USED_PCT COST VIM_MODE DIR < <(
+    echo "$input" | jq -r '[
+        .model.display_name,
+        .model.id,
+        (.version // ""),
+        (.context_window.context_window_size // 200000),
+        ((.context_window.used_percentage // 0) | floor),
+        (.cost.total_cost_usd // 0),
+        (.vim.mode // ""),
+        (.workspace.current_dir)
+    ] | @tsv'
+)
 
 # Autocompact buffer (cached, non-blocking background probe on miss)
 BUFFER_TOKENS=$("$HOME/.claude/autocompact-buffer.sh" "$VERSION" "$MODEL_ID" 2>/dev/null)
@@ -71,7 +75,7 @@ fi
 
 # Line 1: model, vim mode, directory, git branch
 MODEL_COLOR="$CYAN"
-echo "$input" | jq -r '.model.id' | grep -qi sonnet && MODEL_COLOR="$RED"
+[[ "$MODEL_ID" == *sonnet* ]] && MODEL_COLOR="$RED"
 LINE1="${MODEL_COLOR}[$MODEL]${RESET}"
 if [ -n "$VIM_MODE" ]; then LINE1="$LINE1 ${BRIGHT_GREEN}[V]${RESET}"
 else LINE1="$LINE1 ${MAGENTA}[N]${RESET}"; fi
@@ -85,9 +89,17 @@ LINE2="${CTX_BAR} ${REM_FMT}% of ${CTX_LABEL}"
 # Line 3: Max plan usage + cost
 USAGE=$("$HOME/.claude/usage.sh" 2>/dev/null)
 if [ -n "$USAGE" ] && ! echo "$USAGE" | jq -e '.error' > /dev/null 2>&1; then
-    H5=$(echo "$USAGE" | jq -r '.five_hour.utilization // 0' | awk '{printf "%.0f", $1}')
-    D7=$(echo "$USAGE" | jq -r '.seven_day.utilization // 0' | awk '{printf "%.0f", $1}')
-
+    IFS=$'\t' read -r H5 D7 H5_RESET D7_RESET EXTRA_USED < <(
+        echo "$USAGE" | jq -r '[
+            ((.five_hour.utilization // 0) | round),
+            ((.seven_day.utilization // 0) | round),
+            (.five_hour.resets_at // ""),
+            (.seven_day.resets_at // ""),
+            (.extra_usage.used_credits // 0)
+        ] | @tsv' 2>/dev/null
+    )
+fi
+if [ -n "$H5" ] && [ "$H5" != "null" ]; then
     H5_COLOR=$(pct_color "$DIM" "$H5")
     D7_COLOR=$(pct_color "$DIM" "$D7")
     H5_BAR=$(make_bar "$H5" 10)
@@ -98,7 +110,6 @@ if [ -n "$USAGE" ] && ! echo "$USAGE" | jq -e '.error' > /dev/null 2>&1; then
 
     # Countdown: 5h resets_at -> XhXXm
     NOW=$(date +%s)
-    H5_RESET=$(echo "$USAGE" | jq -r '.five_hour.resets_at // empty')
     if [ -n "$H5_RESET" ]; then
         H5_EPOCH=$(date -d "$H5_RESET" +%s 2>/dev/null)
         H5_LEFT=$(( H5_EPOCH - NOW ))
@@ -109,7 +120,6 @@ if [ -n "$USAGE" ] && ! echo "$USAGE" | jq -e '.error' > /dev/null 2>&1; then
     fi
 
     # Countdown: 7d resets_at -> XdXXhXXm
-    D7_RESET=$(echo "$USAGE" | jq -r '.seven_day.resets_at // empty')
     if [ -n "$D7_RESET" ]; then
         D7_EPOCH=$(date -d "$D7_RESET" +%s 2>/dev/null)
         D7_LEFT=$(( D7_EPOCH - NOW ))
@@ -121,7 +131,6 @@ if [ -n "$USAGE" ] && ! echo "$USAGE" | jq -e '.error' > /dev/null 2>&1; then
 
     LINE3="5h ${H5_COLOR}${H5_BAR}${RESET} ${H5_FMT}% ${DIM}${H5_CD}${RESET}   7d ${D7_COLOR}${D7_BAR}${RESET} ${D7_FMT}% ${DIM}${D7_CD}${RESET}"
 
-    EXTRA_USED=$(echo "$USAGE" | jq -r '.extra_usage.used_credits // 0')
     EXTRA_FMT=$(printf '$%.2f' "$EXTRA_USED")
     LINE3="$LINE3 ${DIM}${EXTRA_FMT}${RESET}  ${DIM}${COST_FMT}${RESET}"
 else

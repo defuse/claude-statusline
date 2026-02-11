@@ -7,20 +7,21 @@
 CLAUDE_VER="${1:-unknown}"
 MODEL_ID="${2:-unknown}"
 CACHE_KEY="${CLAUDE_VER}_${MODEL_ID}"
-CACHE_FILE="$HOME/.claude/cache/autocompact_buffer.json"
+CACHE_DIR="$HOME/.claude/cache"
+CACHE_KEY_FILE="$CACHE_DIR/autocompact_buffer.key"
+CACHE_VAL_FILE="$CACHE_DIR/autocompact_buffer.val"
 
-# Check cache
-if [ -f "$CACHE_FILE" ]; then
-    CACHED_KEY=$(jq -r '.key // empty' "$CACHE_FILE" 2>/dev/null)
-    if [ "$CACHED_KEY" = "$CACHE_KEY" ]; then
-        jq -r '.buffer_tokens // empty' "$CACHE_FILE" 2>/dev/null
+# Check cache (plain text, no jq on hot path)
+if [ -f "$CACHE_KEY_FILE" ] && [ -f "$CACHE_VAL_FILE" ]; then
+    if [ "$(<"$CACHE_KEY_FILE")" = "$CACHE_KEY" ]; then
+        cat "$CACHE_VAL_FILE"
         exit 0
     fi
 fi
 
 # Cache miss: print nothing and probe in the background.
 # Next statusline refresh will pick up the cached value.
-LOCK_FILE="${CACHE_FILE}.lock"
+LOCK_FILE="${CACHE_DIR}/autocompact_buffer.lock"
 
 # Clear stale locks (older than 60s = probe should finish in ~20s)
 if [ -d "$LOCK_FILE" ]; then
@@ -39,6 +40,7 @@ pid, fd = pty.fork()
 if pid == 0:
     os.environ['CLAUDE_AUTO_UPDATE'] = '0'
     os.chdir('/tmp')
+    # TODO: MODEL_ID is shell-interpolated into Python; would break on single quotes
     os.execvp('claude', ['claude', '--model', '$MODEL_ID'])
     os._exit(1)
 else:
@@ -66,7 +68,9 @@ else:
     os.write(fd, b'\r')
     time.sleep(3)
     read_all()
-    try: os.waitpid(pid, os.WNOHANG)
+    try: os.kill(pid, 15)
+    except: pass
+    try: os.waitpid(pid, 0)
     except: pass
     output = b''.join(buf)
     clean = re.sub(rb'\x1b\[[0-9;]*[a-zA-Z]|\x1b\]\d*;?[^\x07]*\x07?', b'', output)
@@ -76,8 +80,9 @@ else:
         BUFFER_K=$(echo "$RAW" | grep -oP 'Autocompact\s*buffer[^0-9]*(\d+\.?\d*)k' | grep -oP '[\d.]+(?=k)' | head -1)
         if [ -n "$BUFFER_K" ]; then
             BUFFER_TOKENS=$(awk "BEGIN {printf \"%.0f\", $BUFFER_K * 1000}")
-            mkdir -p "$(dirname "$CACHE_FILE")"
-            printf '{"key":"%s","buffer_tokens":%s}\n' "$CACHE_KEY" "$BUFFER_TOKENS" > "$CACHE_FILE"
+            mkdir -p "$CACHE_DIR"
+            printf '%s' "$BUFFER_TOKENS" > "$CACHE_VAL_FILE"
+            printf '%s' "$CACHE_KEY" > "$CACHE_KEY_FILE"
         fi
     ) &>/dev/null &
     disown
