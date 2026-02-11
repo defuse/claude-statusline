@@ -15,6 +15,17 @@ Add these scripts to `~/.claude` and add the `statusline.sh` script to your `~/.
 }
 ```
 
+To add the scripts to `~/.claude` (assuming you don't have a git repo there already):
+
+```
+cd ~/.claude
+git init
+git remote add origin git@github.com:defuse/claude-statusline.git
+git fetch
+git reset origin/main
+git checkout -t origin/main
+```
+
 ### Dependencies
 
 - `jq` - JSON parsing
