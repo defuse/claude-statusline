@@ -16,7 +16,6 @@ IFS=$'\t' read -r MODEL MODEL_ID VERSION CTX_SIZE USED_PCT COST VIM_MODE DIR < <
 
 # Autocompact buffer (cached, non-blocking background probe on miss)
 BUFFER_TOKENS=$("$HOME/.claude/autocompact-buffer.sh" "$VERSION" "$MODEL_ID" 2>/dev/null)
-
 GREEN='\033[32m'; YELLOW='\033[33m'; RED='\033[31m'
 CYAN='\033[36m'; MAGENTA='\033[35m'; BRIGHT_GREEN='\033[92m'; DIM='\033[2m'; GRAY='\033[90m'; RESET='\033[0m'
 
@@ -59,7 +58,7 @@ else
     BUF_W=0
 fi
 if [ "$PCT" -ge 80 ]; then     USED_CLR='\033[2;31m'; FREE_CLR="$RED"
-elif [ "$PCT" -ge 60 ]; then   USED_CLR='\033[2;33m'; FREE_CLR="$YELLOW"
+elif [ "$PCT" -ge 65 ]; then   USED_CLR='\033[2;33m'; FREE_CLR="$YELLOW"
 else                            USED_CLR='\033[2;32m'; FREE_CLR="$GREEN"
 fi
 printf -v _U '%*s' "$USED_W" ''; printf -v _F '%*s' "$FREE_W" ''; printf -v _B '%*s' "$BUF_W" ''
