@@ -130,7 +130,7 @@ if [ -n "$H5" ] && [ "$H5" != "null" ]; then
 
     LINE3="5h ${H5_COLOR}${H5_BAR}${RESET} ${H5_FMT}% ${DIM}${H5_CD}${RESET}   7d ${D7_COLOR}${D7_BAR}${RESET} ${D7_FMT}% ${DIM}${D7_CD}${RESET}"
 
-    EXTRA_FMT=$(printf '$%.2f' "$EXTRA_USED")
+    EXTRA_FMT=$(printf '$%.2f' "$(echo "$EXTRA_USED / 100" | bc -l)")
     LINE3="$LINE3 ${DIM}${EXTRA_FMT}${RESET}  ${DIM}${COST_FMT}${RESET}"
 else
     LINE3="${DIM}${COST_FMT}${RESET}"
