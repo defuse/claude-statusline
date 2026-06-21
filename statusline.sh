@@ -21,7 +21,7 @@ USED_PCT=${F[4]}; COST=${F[5]}; VIM_MODE=${F[6]}; DIR=${F[7]}; EFFORT=${F[8]}
 
 # Autocompact buffer (cached, non-blocking background probe on miss)
 BUFFER_TOKENS=$("$HOME/.claude/autocompact-buffer.sh" "$VERSION" "$MODEL_ID" 2>/dev/null)
-GREEN='\033[32m'; YELLOW='\033[33m'; RED='\033[31m'
+GREEN='\033[32m'; MIDGREEN='\033[38;5;22m'; YELLOW='\033[33m'; RED='\033[31m'
 CYAN='\033[36m'; MAGENTA='\033[35m'; BRIGHT_GREEN='\033[92m'; DIM='\033[2m'; GRAY='\033[90m'; RESET='\033[0m'
 
 # Build a progress bar: usage $1=pct $2=width
@@ -64,7 +64,7 @@ else
 fi
 if [ "$PCT" -ge 80 ]; then     USED_CLR='\033[2;31m'; FREE_CLR="$RED"
 elif [ "$PCT" -ge 65 ]; then   USED_CLR='\033[2;33m'; FREE_CLR="$YELLOW"
-else                            USED_CLR='\033[2;32m'; FREE_CLR="$GREEN"
+else                            USED_CLR='\033[2;32m'; FREE_CLR="$MIDGREEN"
 fi
 printf -v _U '%*s' "$USED_W" ''; printf -v _F '%*s' "$FREE_W" ''; printf -v _B '%*s' "$BUF_W" ''
 CTX_BAR="${USED_CLR}${_U// /░}${FREE_CLR}${_F// /█}${RESET}${GRAY}${_B// /░}${RESET}"
@@ -81,7 +81,7 @@ fi
 MODEL_COLOR="$CYAN"
 [[ "$MODEL_ID" == *sonnet* ]] && MODEL_COLOR="$RED"
 LINE1="${MODEL_COLOR}[$MODEL]${RESET}"
-if [ -n "$VIM_MODE" ]; then LINE1="$LINE1 ${BRIGHT_GREEN}[V]${RESET}"
+if [ -n "$VIM_MODE" ]; then LINE1="$LINE1 ${GREEN}[V]${RESET}"
 else LINE1="$LINE1 ${MAGENTA}[N]${RESET}"; fi
 if [ -n "$EFFORT" ]; then
     case "$EFFORT" in
