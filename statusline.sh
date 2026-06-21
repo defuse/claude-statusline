@@ -1,7 +1,9 @@
 #!/bin/bash
 input=$(cat)
 
-IFS=$'\t' read -r MODEL MODEL_ID VERSION CTX_SIZE USED_PCT COST VIM_MODE DIR < <(
+# Read each field on its own line so empty fields (e.g. no vim mode or no
+# effort) keep their position — IFS=$'\t' read would collapse adjacent tabs.
+mapfile -t F < <(
     echo "$input" | jq -r '[
         .model.display_name,
         .model.id,
@@ -10,9 +12,12 @@ IFS=$'\t' read -r MODEL MODEL_ID VERSION CTX_SIZE USED_PCT COST VIM_MODE DIR < <
         ((.context_window.used_percentage // 0) | floor),
         (.cost.total_cost_usd // 0),
         (.vim.mode // ""),
-        (.workspace.current_dir // "")
-    ] | @tsv'
+        (.workspace.current_dir // ""),
+        (.effort.level // "")
+    ] | .[]'
 )
+MODEL=${F[0]}; MODEL_ID=${F[1]}; VERSION=${F[2]}; CTX_SIZE=${F[3]}
+USED_PCT=${F[4]}; COST=${F[5]}; VIM_MODE=${F[6]}; DIR=${F[7]}; EFFORT=${F[8]}
 
 # Autocompact buffer (cached, non-blocking background probe on miss)
 BUFFER_TOKENS=$("$HOME/.claude/autocompact-buffer.sh" "$VERSION" "$MODEL_ID" 2>/dev/null)
@@ -78,6 +83,17 @@ MODEL_COLOR="$CYAN"
 LINE1="${MODEL_COLOR}[$MODEL]${RESET}"
 if [ -n "$VIM_MODE" ]; then LINE1="$LINE1 ${BRIGHT_GREEN}[V]${RESET}"
 else LINE1="$LINE1 ${MAGENTA}[N]${RESET}"; fi
+if [ -n "$EFFORT" ]; then
+    case "$EFFORT" in
+        low)    EFFORT_CLR='\033[38;5;208m' ;;  # orange
+        medium) EFFORT_CLR='\033[38;5;226m' ;;  # bright yellow
+        high)   EFFORT_CLR='\033[38;5;198m' ;;  # bright pink
+        xhigh)  EFFORT_CLR='\033[38;5;183m' ;;  # pale purple
+        max)    EFFORT_CLR='\033[38;5;196m' ;;  # bright red
+        *)      EFFORT_CLR='\033[94m' ;;        # fallback: bright blue
+    esac
+    LINE1="$LINE1 ${EFFORT_CLR}[$EFFORT]${RESET}"
+fi
 LINE1="$LINE1 ${DIR}"
 [ -n "$BRANCH" ] && LINE1="$LINE1 ${DIM}on${RESET} ${GREEN}$BRANCH${RESET}"
 
